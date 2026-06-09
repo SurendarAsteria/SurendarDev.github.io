@@ -1,39 +1,588 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="utf-8"/>
-        <meta name="viewport" content="width=device-width, initial-scale=1"/>
- 
-        <title>Burundi | Market Analytics</title>
-        
-        <!-- Load styles of the libraries -->
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
-        
-        <!-- Load own styles -->
-        <link rel="stylesheet" href="./styles/index.css" type="text/css"/>
- 
-        <!-- Define the application icon -->
-        <link rel="icon" href="./images/favicon.png" type="image/png">
-    </head>
- 
-    <body>
-        <div id="index-bg">
-            <div id="index-overlay">
-              <main class="d-flex h-100 w-100 justify-content-center align-items-center">
-                    <div id="index-info">
-                        <h1><strong>Surendar</strong> | Market Analytics</h1>
-            
-                        <h2>
-                            Designed and developed for the MOOC:<br/>
-                            <strong>Geo web app building with open-source GIS tools </strong>
-                        </h2>
- 
-                        <a href="viewer.html">
-                            <span>Open app</span>
-                        </a>                        
-                    </div>
-                </main>  
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GeoTag Studio - Pro Injector + 360 Panorama</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exifreader@4.12.0/dist/exif-reader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
+    <!-- Leaflet Draw for measurement -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+    <!-- Three.js and OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; display: flex; height: 100vh; background: #111; color: #eee; overflow: hidden; }
+        #sidebar { width: 520px; display: flex; flex-direction: column; background: #1e1e1e; border-right: 1px solid #333; height: 100vh; overflow: hidden; }
+        #map { flex: 1; position: relative; }
+        .panel { padding: 5px 8px; border-bottom: 1px solid #333; flex-shrink: 0; }
+        .panel-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .panel-title h3 { margin: 0; font-size: 12px; }
+        .panel-title .count { font-size: 9px; color: #888; background: #333; padding: 2px 5px; border-radius: 10px; }
+        .workflow-steps { display: flex; gap: 8px; margin: 3px 0; flex-wrap: wrap; }
+        .workflow-step { flex: 1; display: flex; align-items: center; padding: 3px 6px; background: #252526; border-radius: 4px; font-size: 9px; min-width: 0; }
+        .workflow-step .step-num { width: 18px; height: 18px; background: #374151; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; margin-right: 6px; flex-shrink: 0; }
+        .workflow-step.completed .step-num { background: #10b981; }
+        .workflow-step .step-text { flex: 1; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .workflow-step .step-status { font-size: 8px; color: #888; margin-left: 4px; flex-shrink: 0; }
+        .tabs { display: flex; border-bottom: 1px solid #333; flex-shrink: 0; }
+        .tab { flex: 1; padding: 6px 0; text-align: center; cursor: pointer; background: #252526; border: none; color: #888; font-size: 9px; font-weight: 500; transition: all 0.2s; }
+        .tab:hover { background: #2a2a2a; color: #ccc; }
+        .tab.active { background: #1e1e1e; color: #2563eb; border-bottom: 2px solid #2563eb; }
+        .tab-content { display: none; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; }
+        .tab-content.active { display: flex; }
+        .table-section { display: flex; flex-direction: column; background: #1e1e1e; margin: 0; border-bottom: 1px solid #333; flex-shrink: 0; }
+        .table-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: #2a2a2a; cursor: pointer; user-select: none; font-size: 9px; font-weight: 600; color: #93c5fd; }
+        .table-header:hover { background: #333; }
+        .table-header .collapse-btn { font-size: 11px; background: none; border: none; color: #888; cursor: pointer; width: auto; padding: 0 4px; }
+        .table-container { overflow: auto; transition: max-height 0.2s ease; max-height: none; }
+        .table-container.collapsed { max-height: 0; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; font-size: 8px; min-width: 400px; }
+        th, td { padding: 4px 4px; text-align: left; white-space: nowrap; }
+        th { background: #2a2a2a; position: sticky; top: 0; z-index: 10; font-weight: 600; }
+        td { border-bottom: 1px solid #2a2a2a; }
+        tr:hover { background: #252526; }
+        tr.selected { background: #1e3a5f; }
+        .coord-cell { color: #93c5fd; font-family: 'SF Mono', monospace; font-size: 8px; }
+        .status-badge { padding: 1px 4px; border-radius: 8px; font-size: 7px; font-weight: 600; }
+        .status-matched { background: #065f46; color: #4ade80; }
+        .status-unmatched { background: #333; color: #f87171; }
+        .status-geotagged { background: #065f46; color: #34d399; }
+        .status-not-geotagged { background: #333; color: #9ca3af; }
+        .log { height: 70px; background: #0a0a0a; color: #0f0; font-family: monospace; font-size: 8px; padding: 5px; overflow-y: auto; border-top: 1px solid #333; flex-shrink: 0; }
+        button { background: #2563eb; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: 600; transition: background 0.2s; }
+        button:hover { background: #1d4ed8; }
+        button:disabled { background: #444; cursor: not-allowed; opacity: 0.7; }
+        button.success { background: #10b981; }
+        button.success:hover { background: #059669; }
+        button.danger { background: #ef4444; }
+        button.danger:hover { background: #dc2626; }
+        button.warning { background: #f59e0b; }
+        button.warning:hover { background: #d97706; }
+        button.btn-small { padding: 2px 6px; font-size: 8px; width: auto; }
+        .btn-icon { padding: 2px 5px; font-size: 8px; background: #374151; }
+        .btn-icon:hover { background: #4b5563; }
+        .format-notice { font-size: 7px; color: #888; margin-top: 4px; padding: 3px; background: #252526; border-radius: 3px; }
+        .error-banner { background: #450a0a; border: 1px solid #f87171; color: #fca5a5; padding: 4px; border-radius: 3px; margin: 4px 0; font-size: 8px; display: none; }
+        .progress-bar { height: 2px; background: #333; border-radius: 1px; overflow: hidden; margin-top: 4px; }
+        .progress-fill { height: 100%; background: #2563eb; width: 0%; transition: width 0.2s; }
+        .map-layer-control { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.85); padding: 8px; border-radius: 5px; z-index: 1000; font-size: 8px; min-width: 140px; }
+        .map-layer-control h4 { margin: 0 0 5px 0; font-size: 9px; }
+        .layer-item { display: flex; align-items: center; margin: 2px 0; }
+        .layer-item input { margin-right: 4px; width: 10px; height: 10px; }
+        .layer-color { width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+        .layer-csv { background: #3b82f6; }
+        .layer-image { background: #f59e0b; }
+        .layer-matched { background: #10b981; }
+        .layer-unmatched { background: #ef4444; }
+        .fit-button { margin-top: 6px; background: #374151; font-size: 8px; padding: 3px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; justify-content: center; align-items: center; }
+        .modal-content { max-width: 90vw; max-height: 90vh; background: #111; border-radius: 8px; overflow: auto; position: relative; }
+        .modal-content.fullscreen { max-width: none; max-height: none; width: 100%; height: 100%; border-radius: 0; }
+        .modal-content img { max-width: 100%; max-height: 70vh; display: block; margin: auto; }
+        .modal-close { position: absolute; top: 10px; right: 20px; color: #fff; font-size: 24px; cursor: pointer; background: none; border: none; z-index: 10001; }
+        .panorama-btn { margin-top: 10px; background: #f59e0b; }
+        .panorama-container { width: 100%; height: 70vh; background: #000; }
+        .modal-content.fullscreen .panorama-container { height: 100vh; }
+        .flex-buttons { display: flex; gap: 4px; margin-top: 4px; }
+        .match-summary { background:#1e3a5f; padding:4px; margin:4px 0; font-size:8px; display:inline-block; }
+        .match-summary span { margin-right: 8px; }
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 6px 12px; border-radius: 4px; font-size: 10px; z-index: 10001; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        .fullscreen-exit { position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); color: white; border: none; padding: 8px 12px; cursor: pointer; z-index: 10002; border-radius: 4px; font-size: 12px; }
+        .map-coords { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: monospace; cursor: pointer; z-index: 1000; }
+        .map-zoom-level { position: absolute; bottom: 50px; left: 10px; background: rgba(0,0,0,0.7); padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: monospace; z-index: 1000; }
+        .measure-control { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; z-index: 1000; }
+        .clear-measure { position: absolute; bottom: 50px; right: 10px; background: rgba(0,0,0,0.7); padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; z-index: 1000; }
+        .glow-marker { filter: drop-shadow(0 0 6px currentColor); animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { filter: drop-shadow(0 0 2px currentColor); } 100% { filter: drop-shadow(0 0 8px currentColor); } }
+        .pano-controls { position: absolute; bottom: 20px; left: 20px; background: rgba(0,0,0,0.7); padding: 8px; border-radius: 8px; display: flex; gap: 8px; z-index: 10003; }
+        .pano-controls button { background: #333; color: white; border: none; padding: 6px 10px; cursor: pointer; font-size: 12px; border-radius: 4px; }
+        .pano-controls button:hover { background: #555; }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <div class="panel">
+        <div class="panel-title">
+            <h3>🗺️ GeoTag Pro + 360</h3>
+            <span style="font-size:8px">v5.0</span>
+        </div>
+        <div class="workflow-steps">
+            <div class="workflow-step" id="step1"><div class="step-num">1</div><div class="step-text">Load CSV</div><div class="step-status" id="step1Status">Pending</div></div>
+            <div class="workflow-step" id="step2"><div class="step-num">2</div><div class="step-text">Load Images</div><div class="step-status" id="step2Status">Pending</div></div>
+            <div class="workflow-step" id="step3"><div class="step-num">3</div><div class="step-text">Match</div><div class="step-status" id="step3Status">Pending</div></div>
+        </div>
+        <div id="errorBanner" class="error-banner"></div>
+        <div class="flex-buttons">
+            <button onclick="triggerCsvLoad()" class="btn-small">📄 CSV</button>
+            <button onclick="triggerImgLoad()" class="btn-small">🖼️ Images</button>
+            <button onclick="checkMatching()" class="btn-small warning" id="matchBtn" disabled>🔍 Match</button>
+        </div>
+        <input type="file" id="csvIn" accept=".csv,text/csv">
+        <input type="file" id="imgIn" multiple accept="image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png">
+        <div id="matchSummary" class="match-summary" style="display:none;">
+            <span>📋 CSV: <span id="sumCsv">0</span></span>
+            <span>🖼️ Images: <span id="sumImg">0</span></span>
+            <span>✅ Matched: <span id="sumMatched">0</span></span>
+            <span>❌ Unmatched: <span id="sumUnmatched">0</span></span>
+        </div>
+        <div class="format-notice"><strong>⚠️</strong> JPEG GPS injection | Preserves all other metadata</div>
+    </div>
+    <div class="panel" style="padding:4px 8px;">
+        <div style="display:flex; justify-content:space-between; font-size:9px;"><span>Progress</span><span id="matchCount">0/0</span></div>
+        <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+    </div>
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('csv')">CSV (<span id="csvCount">0</span>)</button>
+        <button class="tab" onclick="switchTab('images')">Images (<span id="imgCount">0</span>)</button>
+        <button class="tab" onclick="switchTab('match')">Matched (<span id="matchedCount">0</span>)</button>
+    </div>
+
+    <div id="tab-csv" class="tab-content active">
+        <div style="padding:2px 8px;"><button class="btn-small toggle-all-btn" onclick="toggleAllTables('csv')">🔽 Toggle All</button></div>
+        <div class="table-section">
+            <div class="table-header" onclick="toggleTable('csvTable')">
+                <span>CSV Points</span>
+                <button class="collapse-btn" id="csvTableToggle">−</button>
+            </div>
+            <div id="csvTable" class="table-container">
+                <table><thead><tr><th>Filename</th><th>Latitude</th><th>Longitude</th><th>Alt</th><th>Status</th></tr></thead><tbody id="csvTbody"></tbody></table>
             </div>
         </div>
-    </body>
+    </div>
+
+    <div id="tab-images" class="tab-content">
+        <div style="padding:2px 8px;"><button class="btn-small toggle-all-btn" onclick="toggleAllTables('images')">🔽 Toggle All</button></div>
+        <div class="table-section">
+            <div class="table-header" onclick="toggleTable('imagesTable')">
+                <span>Loaded Images</span>
+                <button class="collapse-btn" id="imagesTableToggle">−</button>
+            </div>
+            <div id="imagesTable" class="table-container">
+                <table><thead><tr><th>Filename</th><th>Format</th><th>Existing GPS</th><th>Match</th><th>Preview</th></tr></thead><tbody id="imagesTbody"></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-match" class="tab-content">
+        <div style="padding:2px 8px;"><button class="btn-small toggle-all-btn" onclick="toggleAllTables('match')">🔽 Toggle All</button></div>
+        <div class="table-section">
+            <div class="table-header" onclick="toggleTable('matchTable')">
+                <span>Matched Pairs</span>
+                <button class="collapse-btn" id="matchTableToggle">−</button>
+            </div>
+            <div id="matchTable" class="table-container">
+                <table><thead><tr><th>File</th><th>CSV GPS (lat/lon/alt)</th><th>Image GPS (lat/lon/alt)</th><th>Preview</th></tr></thead><tbody id="matchTbody"></tbody></table>
+            </div>
+        </div>
+        <div id="gpsDetailPanel" class="detail-panel" style="display:none; background:#1e1e1e; padding:6px; border-top:1px solid #333;">
+            <div class="detail-header"><h4 id="detailTitle">GPS Details</h4><button class="close-btn" onclick="closeDetailPanel()">×</button></div>
+            <div id="detailContent"></div>
+        </div>
+    </div>
+
+    <div id="logger" class="log">✓ Ready. Load CSV to begin.</div>
+    <div class="panel" style="padding:6px;">
+        <button id="exportBtn" onclick="runForceExport()" class="success" disabled>✨ Write & Export All</button>
+        <button id="exportCsvBtn" onclick="exportExistingGpsAsCsv()" class="btn-small" style="margin:3px 0;background:#4b5563;">📊 Export GPS → CSV</button>
+        <button id="clearBtn" onclick="resetAll()" class="danger" style="background:#374151;">🗑️ Clear All</button>
+    </div>
+</div>
+<div id="map"></div>
+
+<div class="map-coords" id="mapCoords">(click to copy)</div>
+<div class="map-zoom-level" id="zoomLevel">Zoom: 2</div>
+<div class="measure-control" id="measureBtn">📏 Measure</div>
+<div class="clear-measure" id="clearMeasureBtn" style="display:none;">🗑️ Clear</div>
+
+<div class="map-layer-control">
+    <h4>Map Layers</h4>
+    <div class="layer-item"><span class="layer-color layer-csv"></span><input type="checkbox" id="layerCsv" checked onchange="toggleLayer('csv')"><label>CSV Locations</label></div>
+    <div class="layer-item"><span class="layer-color layer-image"></span><input type="checkbox" id="layerImage" checked onchange="toggleLayer('image')"><label>Image GPS (Existing)</label></div>
+    <div class="layer-item"><span class="layer-color layer-matched"></span><input type="checkbox" id="layerMatched" checked onchange="toggleLayer('matched')"><label>Matched Pairs</label></div>
+    <div class="layer-item"><span class="layer-color layer-unmatched"></span><input type="checkbox" id="layerUnmatched" checked onchange="toggleLayer('unmatched')"><label>Unmatched CSV</label></div>
+    <div class="layer-toggle-all"><button onclick="toggleAllLayers(true)">Show All</button><button onclick="toggleAllLayers(false)">Hide All</button></div>
+    <button class="fit-button" onclick="fitToCSV()">📍 Fit CSV</button>
+</div>
+
+<div id="previewModal" class="modal" onclick="closeModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+        <img id="previewImg" src="" alt="Image preview" style="max-width:100%; max-height:70vh; display:block; margin:auto;">
+        <div style="text-align:center; padding:10px;">
+            <button id="panoramaBtn" class="panorama-btn" style="display:none;">🌐 360° View</button>
+        </div>
+        <div id="panoramaContainer" style="display:none; width:100%; height:70vh;"></div>
+    </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ============ CONFIG ============
+const CONFIG = { MAX_FILE_SIZE: 50*1024*1024, MAX_IMAGES: 100, EXPORT_DELAY_MS: 500 };
+let map = null, markerGroups = { csv:null, image:null, matched:null, unmatched:null };
+let state = { csvData:{}, imageData:{}, matched:{}, layerVisibility:{ csv:true, image:true, matched:true, unmatched:true }, csvMarkerGroups:{}, imageMarkerGroups:{}, matchedMarkerGroups:{}, workflow:{ step1:false, step2:false, step3:false }, isProcessing:false };
+let threeViewer = null;
+let drawControl = null, drawingEnabled = false;
+let drawnItems = null;
+
+// ============ UTILS ============
+function log(msg, type='info') { let c={info:'#0f0', success:'#4ade80', error:'#f87171', warn:'#fbbf24'}; let logger=document.getElementById('logger'); logger.innerHTML+=`[${new Date().toLocaleTimeString()}] <span style="color:${c[type]||'#0f0'}">${escapeHtml(msg)}</span>\n`; logger.scrollTop=logger.scrollHeight; }
+function escapeHtml(t) { let d=document.createElement('div'); d.textContent=t??''; return d.innerHTML; }
+function isValidCoord(v) { return typeof v==='number' && !isNaN(v) && isFinite(v); }
+function hasValidGPS(e) { return e && isValidCoord(e.GPSLatitude?.value) && isValidCoord(e.GPSLongitude?.value); }
+function normName(n) { return (n||'').split('.')[0].toLowerCase().replace(/[^a-z0-9_]/g,''); }
+function showToast(msg) { let t=document.getElementById('toast'); t.innerText=msg; t.style.opacity='1'; setTimeout(()=>t.style.opacity='0',2000); }
+
+// ============ MAP INIT ============
+function initMap() {
+    markerGroups = { csv:L.layerGroup(), image:L.layerGroup(), matched:L.layerGroup(), unmatched:L.layerGroup() };
+    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles © Esri', maxZoom:19 });
+    map = L.map('map', { center:[20,0], zoom:2, layers:[satellite, markerGroups.csv, markerGroups.image, markerGroups.matched, markerGroups.unmatched], zoomControl:true });
+    L.control.scale({position:'bottomright'}).addTo(map);
+    map.on('zoomend', () => document.getElementById('zoomLevel').innerText = `Zoom: ${map.getZoom()}`);
+    map.on('mousemove', (e) => document.getElementById('mapCoords').innerHTML = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} (click to copy)`);
+    map.on('click', (e) => { navigator.clipboard.writeText(`${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`); showToast('Coordinates copied!'); });
+    drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+    log('Map ready');
+}
+
+// ============ MEASURE TOOL ============
+function toggleMeasure() {
+    if (drawingEnabled) {
+        map.removeControl(drawControl);
+        drawingEnabled = false;
+        document.getElementById('measureBtn').style.background = '#374151';
+        document.getElementById('clearMeasureBtn').style.display = 'none';
+    } else {
+        drawControl = new L.Control.Draw({ 
+            draw: { polyline: { metric: true, showLength: true }, polygon: { metric: true, showArea: true }, circle: false, rectangle: false, marker: false }, 
+            edit: { featureGroup: drawnItems, remove: true }
+        });
+        map.addControl(drawControl);
+        drawingEnabled = true;
+        document.getElementById('measureBtn').style.background = '#10b981';
+        document.getElementById('clearMeasureBtn').style.display = 'block';
+        map.on('draw:created', (e) => {
+            const layer = e.layer;
+            let measurement = '';
+            if (e.layerType === 'polyline') {
+                const length = layer.getLatLngs().reduce((acc, p, i, arr) => {
+                    if (i === 0) return 0;
+                    return acc + arr[i-1].distanceTo(p);
+                }, 0);
+                const meters = length;
+                const km = meters / 1000;
+                if (km >= 1) measurement = `Distance: ${km.toFixed(3)} km`;
+                else if (meters >= 1) measurement = `Distance: ${meters.toFixed(2)} m`;
+                else measurement = `Distance: ${(meters*100).toFixed(1)} cm`;
+            } else if (e.layerType === 'polygon') {
+                const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+                const hectares = area / 10000;
+                if (hectares >= 1) measurement = `Area: ${hectares.toFixed(2)} ha`;
+                else measurement = `Area: ${area.toFixed(1)} m²`;
+            }
+            layer.bindPopup(measurement).openPopup();
+            drawnItems.addLayer(layer);
+        });
+    }
+}
+function clearMeasurements() {
+    drawnItems.clearLayers();
+    showToast('Measurements cleared');
+}
+document.getElementById('measureBtn').onclick = toggleMeasure;
+document.getElementById('clearMeasureBtn').onclick = clearMeasurements;
+
+// ============ WORKFLOW ============
+function updateWorkflowStep(step, done) { let el=document.getElementById(`step${step}`), st=document.getElementById(`step${step}Status`); if(el&&st){ if(done){ el.classList.add('completed'); st.textContent='✓'; st.style.color='#4ade80'; } else { el.classList.remove('completed'); st.textContent=''; st.style.color='#888'; } } state.workflow[`step${step}`]=done; document.getElementById('matchBtn').disabled=!(state.workflow.step1&&state.workflow.step2); document.getElementById('exportBtn').disabled=!state.workflow.step3||state.isProcessing||Object.keys(state.matched).length===0; }
+function updateCounts() { let c=Object.keys(state.csvData).length, i=Object.keys(state.imageData).length, m=Object.keys(state.matched).length; document.getElementById('csvCount').innerText=c; document.getElementById('imgCount').innerText=i; document.getElementById('matchedCount').innerText=m; document.getElementById('matchCount').innerText=`${m}/${c} matched`; document.getElementById('progressFill').style.width=c?`${(m/c)*100}%`:'0%'; document.getElementById('sumCsv').innerText=c; document.getElementById('sumImg').innerText=i; document.getElementById('sumMatched').innerText=m; document.getElementById('sumUnmatched').innerText=c-m; document.getElementById('matchSummary').style.display=state.workflow.step3?'inline-block':'none'; }
+function updateUI() { updateCSVTable(); updateImagesTable(); updateMatchTable(); updateCounts(); updateMapMarkers(); }
+
+// ============ TABLES ============
+function updateCSVTable() { let tb=document.getElementById('csvTbody'); if(!tb) return; let keys=Object.keys(state.csvData).sort(); if(!keys.length){ tb.innerHTML='<tr><td colspan="5" style="text-align:center">No CSV data loaded</td></tr>'; return; } tb.innerHTML=keys.map(k=>{ let e=state.csvData[k]; let matched=!!state.matched[k]; return `<tr data-key="${escapeHtml(k)}" data-type="csv" ondblclick="handleRowDoubleClick('${escapeHtml(k)}','csv')" onclick="handleRowClick('${escapeHtml(k)}','csv')" onmouseenter="highlightMarkerGlow('${escapeHtml(k)}', 'csv', true)" onmouseleave="highlightMarkerGlow('${escapeHtml(k)}', 'csv', false)"><td title="${escapeHtml(e.name)}">${escapeHtml(e.name)}</td><td class="coord-cell">${e.lat.toFixed(6)}</td><td class="coord-cell">${e.lng.toFixed(6)}</td><td class="coord-cell">${e.alt.toFixed(1)}</td><td><span class="status-badge ${matched?'status-matched':'status-unmatched'}">${matched?'✅':'❌'}</span></td></tr>`; }).join(''); }
+function updateImagesTable() { let tb=document.getElementById('imagesTbody'); if(!tb) return; let keys=Object.keys(state.imageData).sort(); if(!keys.length){ tb.innerHTML='<tr><td colspan="5" style="text-align:center">No images loaded</td></tr>'; return; } tb.innerHTML=keys.map(k=>{ let img=state.imageData[k]; let hasGPS=hasValidGPS(img.exif); let matched=!!state.matched[k]; let format=img.file.type.includes('jpeg')?'JPEG':img.file.type.includes('png')?'PNG':'?'; return `<tr data-key="${escapeHtml(k)}" data-type="image" ondblclick="handleRowDoubleClick('${escapeHtml(k)}','image')" onclick="handleRowClick('${escapeHtml(k)}','image')" onmouseenter="highlightMarkerGlow('${escapeHtml(k)}', 'image', true)" onmouseleave="highlightMarkerGlow('${escapeHtml(k)}', 'image', false)"><td title="${escapeHtml(img.file.name)}">${escapeHtml(img.file.name)}</td><td>${format}</td><td><span class="status-badge ${hasGPS?'status-geotagged':'status-not-geotagged'}">${hasGPS?'📍 Yes':'📍 No'}</span></td><td><span class="status-badge ${matched?'status-matched':'status-unmatched'}">${matched?'✅':'❌'}</span></td><td><button class="btn-icon" onclick="event.stopPropagation(); previewImage('${escapeHtml(k)}')">👁️</button></td></tr>`; }).join(''); }
+function updateMatchTable() { let tb=document.getElementById('matchTbody'); if(!tb) return; let keys=Object.keys(state.matched).sort(); if(!keys.length){ tb.innerHTML='<tr><td colspan="4" style="text-align:center">No matched pairs</td></tr>'; return; } tb.innerHTML=keys.map(k=>{ let m=state.matched[k]; let csv=m.csv, img=m.image; let hasGPS=hasValidGPS(img.exif); let csvGps = `${csv.lat.toFixed(6)}, ${csv.lng.toFixed(6)} / ${csv.alt.toFixed(1)}m`;
+    let imgGps = hasGPS ? `${img.exif.GPSLatitude.value.toFixed(6)}, ${img.exif.GPSLongitude.value.toFixed(6)} / ${img.exif.GPSAltitude?.value?img.exif.GPSAltitude.value.toFixed(1):'N/A'}m` : 'None / -';
+    return `<tr data-key="${escapeHtml(k)}" data-type="match" ondblclick="handleRowDoubleClick('${escapeHtml(k)}','match')" onclick="handleRowClick('${escapeHtml(k)}','match')" onmouseenter="highlightMarkerGlow('${escapeHtml(k)}', 'match', true)" onmouseleave="highlightMarkerGlow('${escapeHtml(k)}', 'match', false)"><td>${escapeHtml(img.file.name)}</td><td class="coord-cell">${csvGps}</td><td class="coord-cell">${imgGps}</td><td><button class="btn-icon" onclick="event.stopPropagation(); previewImage('${escapeHtml(k)}')">👁️</button></td></tr>`; }).join(''); }
+
+// ============ PREVIEW + 360 ============
+function previewImage(key) {
+    let imgData = state.imageData[key];
+    if(!imgData) return;
+    let url = URL.createObjectURL(imgData.file);
+    let modal = document.getElementById('previewModal');
+    let modalContent = modal.querySelector('.modal-content');
+    let imgElem = document.getElementById('previewImg');
+    let panoContainer = document.getElementById('panoramaContainer');
+    let panoramaBtn = document.getElementById('panoramaBtn');
+    imgElem.src = url;
+    imgElem.style.display = 'block';
+    panoContainer.style.display = 'none';
+    modalContent.classList.remove('fullscreen');
+    if(threeViewer) { threeViewer.destroy(); threeViewer = null; }
+    let oldControls = document.querySelector('.pano-controls');
+    if(oldControls) oldControls.remove();
+    let img = new Image();
+    img.onload = function() {
+        let ratio = img.width / img.height;
+        if(Math.abs(ratio - 2) < 0.1) {
+            panoramaBtn.style.display = 'inline-block';
+            panoramaBtn.onclick = () => {
+                imgElem.style.display = 'none';
+                panoContainer.style.display = 'block';
+                modalContent.classList.add('fullscreen');
+                if(threeViewer) threeViewer.destroy();
+                threeViewer = new ThreePanorama(panoContainer, url);
+                let controlsDiv = document.createElement('div');
+                controlsDiv.className = 'pano-controls';
+                controlsDiv.innerHTML = `
+                    <button id="panoZoomIn">🔍 +</button>
+                    <button id="panoZoomOut">🔍 -</button>
+                    <button id="panoLeft">◀</button>
+                    <button id="panoRight">▶</button>
+                    <button id="panoUp">▲</button>
+                    <button id="panoDown">▼</button>
+                `;
+                modalContent.appendChild(controlsDiv);
+                const pano = threeViewer;
+                document.getElementById('panoZoomIn').onclick = () => { pano.controls.object.zoom *= 1.2; pano.controls.update(); };
+                document.getElementById('panoZoomOut').onclick = () => { pano.controls.object.zoom *= 0.8; pano.controls.update(); };
+                document.getElementById('panoLeft').onclick = () => { pano.controls.object.rotateY(-0.2); pano.controls.update(); };
+                document.getElementById('panoRight').onclick = () => { pano.controls.object.rotateY(0.2); pano.controls.update(); };
+                document.getElementById('panoUp').onclick = () => { pano.controls.object.rotateX(-0.2); pano.controls.update(); };
+                document.getElementById('panoDown').onclick = () => { pano.controls.object.rotateX(0.2); pano.controls.update(); };
+                if (modalContent.requestFullscreen) modalContent.requestFullscreen().catch(e=>console.log('Fullscreen error', e));
+                let exitBtn = document.createElement('button');
+                exitBtn.textContent = 'Exit Fullscreen';
+                exitBtn.className = 'fullscreen-exit';
+                exitBtn.onclick = () => {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                    modalContent.classList.remove('fullscreen');
+                    exitBtn.remove();
+                    controlsDiv.remove();
+                };
+                modalContent.appendChild(exitBtn);
+                const fullscreenChange = () => {
+                    if (!document.fullscreenElement) {
+                        modalContent.classList.remove('fullscreen');
+                        exitBtn.remove();
+                        controlsDiv.remove();
+                        document.removeEventListener('fullscreenchange', fullscreenChange);
+                    }
+                };
+                document.addEventListener('fullscreenchange', fullscreenChange);
+            };
+        } else {
+            panoramaBtn.style.display = 'none';
+        }
+    };
+    img.src = url;
+    modal.style.display = 'flex';
+}
+function closeModal(e) { if(e && e.target !== e.currentTarget) return; let modal = document.getElementById('previewModal'); let modalContent = modal.querySelector('.modal-content'); if (document.fullscreenElement) document.exitFullscreen(); if(threeViewer){ threeViewer.destroy(); threeViewer=null; } modal.style.display='none'; modalContent.classList.remove('fullscreen'); let controls = document.querySelector('.pano-controls'); if(controls) controls.remove(); }
+
+class ThreePanorama {
+    constructor(container, imageUrl) {
+        this.container = container;
+        this.scene = new THREE.Scene();
+        this.camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer.setSize(container.clientWidth, container.clientHeight);
+        container.innerHTML = '';
+        container.appendChild(this.renderer.domElement);
+        const geometry = new THREE.SphereGeometry(500, 64, 64);
+        const texture = new THREE.TextureLoader().load(imageUrl);
+        const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
+        const sphere = new THREE.Mesh(geometry, material);
+        this.scene.add(sphere);
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableZoom = true;
+        this.controls.zoomSpeed = 0.8;
+        this.controls.rotateSpeed = 1.0;
+        this.controls.enablePan = false;
+        this.camera.position.set(0, 0, 0.1);
+        this.controls.target.set(0, 0, 0);
+        this.controls.update();
+        this.animate = this.animate.bind(this);
+        this.animate();
+        this.handleResize = () => {
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            this.camera.aspect = width / height;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(width, height);
+        };
+        window.addEventListener('resize', this.handleResize);
+    }
+    animate() {
+        if (!this.renderer) return;
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+        requestAnimationFrame(this.animate);
+    }
+    destroy() {
+        window.removeEventListener('resize', this.handleResize);
+        if (this.renderer) {
+            this.renderer.dispose();
+            this.renderer.domElement.remove();
+        }
+        this.scene = null;
+        this.camera = null;
+        this.controls = null;
+    }
+}
+
+// ============ MAP MARKERS ============
+function createMarker(lat,lng,name,type,key,onClick) { if(!isValidCoord(lat)||!isValidCoord(lng)) return null; let colors={csv:'#3b82f6',image:'#f59e0b',matched:'#10b981',unmatched:'#ef4444'}; let color=colors[type]||'#888'; let icon=L.divIcon({className:'custom-marker',html:`<div style="background:${color};border:2px solid #fff;border-radius:50%;width:10px;height:10px;"></div>`,iconSize:[10,10],iconAnchor:[5,5]}); let marker=L.marker([lat,lng],{icon}); let label=L.divIcon({className:'marker-label',html:`<span style="font-size:8px;">${escapeHtml(name)}</span>`,iconAnchor:[0,-8]}); let labelMarker=L.marker([lat,lng],{icon:label,interactive:false}); let group=L.layerGroup([marker,labelMarker]); group.bindTooltip(`<strong>${escapeHtml(name)}</strong><br>${lat.toFixed(6)}, ${lng.toFixed(6)}`); if(onClick) group.on('click',()=>onClick(key)); return group; }
+function updateMapMarkers() { Object.values(markerGroups).forEach(g=>g.clearLayers()); state.csvMarkerGroups={}; state.imageMarkerGroups={}; state.matchedMarkerGroups={}; Object.entries(state.csvData).forEach(([k,c])=>{ let m=createMarker(c.lat,c.lng,c.name,'csv',k,(k)=>handleRowClick(k,'csv')); if(m){ markerGroups.csv.addLayer(m); state.csvMarkerGroups[k]=m; } }); Object.entries(state.imageData).forEach(([k,img])=>{ if(img.hasGPS){ let m=createMarker(img.exif.GPSLatitude.value,img.exif.GPSLongitude.value,img.file.name,'image',k,(k)=>handleRowClick(k,'image')); if(m){ markerGroups.image.addLayer(m); state.imageMarkerGroups[k]=m; } } }); Object.entries(state.matched).forEach(([k,m])=>{ let csv=m.csv, img=m.image; if(img.hasGPS){ let line=L.polyline([[csv.lat,csv.lng],[img.exif.GPSLatitude.value,img.exif.GPSLongitude.value]],{color:'#10b981',weight:1,opacity:0.6}); markerGroups.matched.addLayer(line); } let marker=createMarker(csv.lat,csv.lng,csv.name,'matched',k,(k)=>handleRowClick(k,'csv')); if(marker){ markerGroups.matched.addLayer(marker); state.matchedMarkerGroups[k]=marker; } }); Object.keys(state.csvData).forEach(k=>{ if(!state.matched[k]){ let c=state.csvData[k]; let m=createMarker(c.lat,c.lng,c.name,'unmatched',k,(k)=>handleRowClick(k,'csv')); if(m) markerGroups.unmatched.addLayer(m); } }); Object.keys(state.layerVisibility).forEach(t=>{ if(markerGroups[t]){ if(state.layerVisibility[t]) map.addLayer(markerGroups[t]); else map.removeLayer(markerGroups[t]); } }); let pts=[...Object.values(state.csvData).map(c=>[c.lat,c.lng]),...Object.values(state.imageData).filter(i=>i.hasGPS).map(i=>[i.exif.GPSLatitude.value,i.exif.GPSLongitude.value])]; if(pts.length){ let bounds=L.latLngBounds(pts); map.fitBounds(bounds,{padding:[30,30]}); } }
+function highlightMarkerGlow(key, type, enable) {
+    let group = null;
+    if (type === 'csv') group = state.csvMarkerGroups[key];
+    else if (type === 'image') group = state.imageMarkerGroups[key];
+    else if (type === 'match') group = state.matchedMarkerGroups[key];
+    if (!group) return;
+    const color = { csv: '#3b82f6', image: '#f59e0b', matched: '#10b981' }[type];
+    if (enable) {
+        group.getLayers().forEach(layer => {
+            if (layer instanceof L.Marker) {
+                layer.setIcon(L.divIcon({className:'custom-marker glow-marker',html:`<div style="background:${color};border:2px solid #fff;border-radius:50%;width:12px;height:12px;animation:pulse 1s infinite;"></div>`,iconSize:[12,12],iconAnchor:[6,6]}));
+            }
+        });
+    } else {
+        group.getLayers().forEach(layer => {
+            if (layer instanceof L.Marker) {
+                layer.setIcon(L.divIcon({className:'custom-marker',html:`<div style="background:${color};border:2px solid #fff;border-radius:50%;width:10px;height:10px;"></div>`,iconSize:[10,10],iconAnchor:[5,5]}));
+            }
+        });
+    }
+}
+function handleRowClick(k,t){ document.querySelectorAll('tbody tr').forEach(r=>r.classList.remove('selected')); let row=document.querySelector(`tr[data-key="${escapeHtml(k)}"][data-type="${t}"]`); if(row) row.classList.add('selected'); let m = state.csvMarkerGroups[k] || state.imageMarkerGroups[k] || state.matchedMarkerGroups[k]; if(m){ m.getLayers().forEach(l=>{ if(l instanceof L.Marker) l.openPopup(); }); } if(state.matched[k]) showGPSDetails(k); else closeDetailPanel(); }
+function handleRowDoubleClick(k,t){ let pt=null; if(t==='csv' && state.csvData[k]) pt=[state.csvData[k].lat,state.csvData[k].lng]; else if(t==='image' && state.imageData[k] && state.imageData[k].hasGPS) pt=[state.imageData[k].exif.GPSLatitude.value,state.imageData[k].exif.GPSLongitude.value]; else if(t==='match' && state.matched[k]) pt=[state.matched[k].csv.lat,state.matched[k].csv.lng]; if(pt && map) map.setView(pt,16); else log('No GPS coordinates for this item', 'warn'); }
+function showGPSDetails(k){ let m=state.matched[k]; if(!m){ closeDetailPanel(); return; } let csv=m.csv, img=m.image; let detail=document.getElementById('detailContent'); let panel=document.getElementById('gpsDetailPanel'); document.getElementById('detailTitle').innerHTML=`GPS Details: ${escapeHtml(img.file.name)}`; let html=`<div><div><strong>CSV:</strong> ${csv.lat.toFixed(6)}, ${csv.lng.toFixed(6)} / ${csv.alt.toFixed(1)}m</div><div><strong>Existing GPS:</strong> ${img.hasGPS?`${img.exif.GPSLatitude.value.toFixed(6)}, ${img.exif.GPSLongitude.value.toFixed(6)} / ${img.exif.GPSAltitude?.value?img.exif.GPSAltitude.value.toFixed(1):'N/A'}m`:'None'}</div><div><strong>Will inject:</strong> ${csv.lat.toFixed(6)}, ${csv.lng.toFixed(6)} / ${csv.alt.toFixed(1)}m</div></div>`; detail.innerHTML=html; panel.style.display='block'; }
+function closeDetailPanel(){ document.getElementById('gpsDetailPanel').style.display='none'; }
+function fitToCSV(){ let pts=Object.values(state.csvData).map(c=>[c.lat,c.lng]); if(pts.length) map.fitBounds(L.latLngBounds(pts),{padding:[30,30]}); else log('No CSV points to fit', 'warn'); }
+function toggleLayer(type) { let cb=document.getElementById(`layer${type[0].toUpperCase()+type.slice(1)}`); let vis=cb?.checked; state.layerVisibility[type]=vis; if(markerGroups[type]){ if(vis) map.addLayer(markerGroups[type]); else map.removeLayer(markerGroups[type]); } }
+function toggleAllLayers(s) { ['csv','image','matched','unmatched'].forEach(t=>{ let cb=document.getElementById(`layer${t[0].toUpperCase()+t.slice(1)}`); if(cb) cb.checked=s; state.layerVisibility[t]=s; if(markerGroups[t]){ if(s) map.addLayer(markerGroups[t]); else map.removeLayer(markerGroups[t]); } }); }
+function toggleTable(id) { let c=document.getElementById(id); let btn=document.getElementById(id+'Toggle'); if(c.classList.contains('collapsed')){ c.classList.remove('collapsed'); if(btn) btn.textContent='−'; } else { c.classList.add('collapsed'); if(btn) btn.textContent='+'; } }
+function toggleAllTables(tab) { let secs=document.querySelectorAll(`#tab-${tab} .table-section`); let any=Array.from(secs).some(s=>!s.querySelector('.table-container').classList.contains('collapsed')); secs.forEach(s=>{ let c=s.querySelector('.table-container'); let btn=s.querySelector('.collapse-btn'); if(any){ c.classList.add('collapsed'); if(btn) btn.textContent='+'; } else { c.classList.remove('collapsed'); if(btn) btn.textContent='−'; } }); }
+function switchTab(t) { document.querySelectorAll('.tab').forEach(tb=>tb.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active')); document.querySelector(`.tab[onclick="switchTab('${t}')"]`).classList.add('active'); document.getElementById(`tab-${t}`).classList.add('active'); }
+
+// ============ CSV LOAD ============
+function triggerCsvLoad(){ document.getElementById('csvIn').click(); }
+document.getElementById('csvIn').addEventListener('change', e=>{ let f=e.target.files[0]; if(!f) return; Papa.parse(f,{header:true,skipEmptyLines:true,complete:res=>{ let newData={}; let h=res.meta.fields; let col={ filename:h.find(hh=>/point id|filename|name|id/i.test(hh)), lat:h.find(hh=>/latitude|lat/i.test(hh)), lng:h.find(hh=>/longitude|lng|lon/i.test(hh)), alt:h.find(hh=>/altitude|alt|elevation/i.test(hh)) }; if(!col.filename||!col.lat||!col.lng){ alert('CSV must contain columns: Filename, Latitude, Longitude'); return; } for(let row of res.data){ let fn=row[col.filename]; if(!fn) continue; let lat=parseFloat(row[col.lat]), lng=parseFloat(row[col.lng]), alt=col.alt?parseFloat(row[col.alt]):0; if(!isValidCoord(lat)||!isValidCoord(lng)) continue; let key=normName(fn); newData[key]={name:fn,lat,lng,alt:isNaN(alt)?0:alt}; } state.csvData=newData; updateWorkflowStep(1,Object.keys(state.csvData).length>0); updateUI(); log(`Loaded ${Object.keys(state.csvData).length} CSV entries`,'success'); e.target.value=''; }, error:err=>alert('CSV error: '+err.message) }); });
+
+// ============ IMAGE LOAD ============
+function triggerImgLoad(){ document.getElementById('imgIn').click(); }
+document.getElementById('imgIn').addEventListener('change', async e=>{ let files=Array.from(e.target.files); if(!files.length) return; if(Object.keys(state.imageData).length+files.length>CONFIG.MAX_IMAGES){ alert(`Max ${CONFIG.MAX_IMAGES} images`); e.target.value=''; return; } log(`Loading ${files.length} images...`); let loaded=0; for(let file of files){ if(file.size>CONFIG.MAX_FILE_SIZE) continue; let key=normName(file.name); if(!key) continue; let exif={GPSLatitude:null,GPSLongitude:null,GPSAltitude:null}, hasGPS=false; try{ let data=await ExifReader.load(file); let rational=v=>{ if(typeof v==='number') return v; if(Array.isArray(v)&&v.length>=2){ let f=v[0]; if(f&&typeof f==='object'&&'numerator' in f) return f.numerator/f.denominator; if(typeof f==='number') return f/v[1]; } return null; }; let dms=(arr,ref)=>{ if(!Array.isArray(arr)||arr.length<3) return null; let d=rational(arr[0]), m=rational(arr[1]), s=rational(arr[2]); if(d===null||m===null||s===null) return null; let dec=d+m/60+s/3600; if(ref==='S'||ref==='W') dec=-dec; return dec; }; if(data.GPSLatitude && data.GPSLatitudeRef){ let lat=typeof data.GPSLatitude.value==='number'?data.GPSLatitude.value*(data.GPSLatitudeRef.value==='S'?-1:1):dms(data.GPSLatitude.value,data.GPSLatitudeRef.value); if(lat!==null) exif.GPSLatitude={value:lat}; } if(data.GPSLongitude && data.GPSLongitudeRef){ let lng=typeof data.GPSLongitude.value==='number'?data.GPSLongitude.value*(data.GPSLongitudeRef.value==='W'?-1:1):dms(data.GPSLongitude.value,data.GPSLongitudeRef.value); if(lng!==null) exif.GPSLongitude={value:lng}; } if(data.GPSAltitude){ let alt=rational(data.GPSAltitude.value); if(alt!==null){ let ref=data.GPSAltitudeRef?.value??0; exif.GPSAltitude={value:ref===1?-alt:alt}; } } hasGPS=hasValidGPS(exif); if(hasGPS) log(`📍 ${file.name}: ${exif.GPSLatitude.value.toFixed(6)}, ${exif.GPSLongitude.value.toFixed(6)}`,'success'); else log(`⚠️ ${file.name}: No GPS found`,'warn'); }catch(e){ log(`⚠️ ${file.name}: EXIF read error - ${e.message}`,'warn'); } state.imageData[key]={file,exif,hasGPS}; loaded++; } log(`✓ Images: ${loaded} loaded`,'success'); updateWorkflowStep(2,loaded>0); updateUI(); e.target.value=''; });
+
+// ============ MATCHING ============
+function checkMatching(){ if(!state.workflow.step1||!state.workflow.step2){ alert('Please load both CSV and images first'); return; } let matched={}; Object.keys(state.imageData).forEach(k=>{ if(state.csvData[k]) matched[k]={csv:state.csvData[k],image:state.imageData[k],validated:true}; }); state.matched=matched; updateWorkflowStep(3,Object.keys(matched).length>0); updateUI(); log(`Matching complete: ${Object.keys(matched).length} matched images`,'success'); }
+
+// ============ GPS INJECTION (preserves EXIF) with delayed URL revoke ============
+function decimalToDMSRational(d){ let deg=Math.floor(Math.abs(d)); let minFloat=(Math.abs(d)-deg)*60; let min=Math.floor(minFloat); let sec=(minFloat-min)*60; return [[deg,1],[min,1],[Math.round(sec*100),100]]; }
+function forceInjectGPS(key, csv) {
+    return new Promise((resolve, reject) => {
+        const img = state.imageData[key];
+        if (!img || (!img.file.type.includes('jpeg') && !img.file.name.match(/\.jpe?g$/i))) {
+            reject(new Error('Only JPEG supports EXIF injection'));
+            return;
+        }
+        const file = img.file;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const bin = e.target.result;
+                if (bin.charCodeAt(0) !== 0xFF || bin.charCodeAt(1) !== 0xD8) {
+                    reject(new Error('Invalid JPEG header'));
+                    return;
+                }
+                let exifObj;
+                try {
+                    exifObj = piexif.load(bin);
+                } catch (ee) {
+                    exifObj = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {} };
+                }
+                const gps = exifObj.GPS || {};
+                gps[piexif.GPSIFD.GPSLatitude] = decimalToDMSRational(csv.lat);
+                gps[piexif.GPSIFD.GPSLatitudeRef] = csv.lat >= 0 ? 'N' : 'S';
+                gps[piexif.GPSIFD.GPSLongitude] = decimalToDMSRational(csv.lng);
+                gps[piexif.GPSIFD.GPSLongitudeRef] = csv.lng >= 0 ? 'E' : 'W';
+                gps[piexif.GPSIFD.GPSAltitude] = [Math.round(Math.abs(csv.alt) * 100), 100];
+                gps[piexif.GPSIFD.GPSAltitudeRef] = csv.alt < 0 ? 1 : 0;
+                exifObj.GPS = gps;
+                const exifBytes = piexif.dump(exifObj);
+                const newBin = piexif.insert(exifBytes, bin);
+                const arr = new Uint8Array(newBin.length);
+                for (let i = 0; i < newBin.length; i++) arr[i] = newBin.charCodeAt(i) & 0xFF;
+                const blob = new Blob([arr], { type: 'image/jpeg' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name;
+                document.body.appendChild(a);
+                a.click();
+                // Delay revoke to ensure download starts
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                }, 500);
+                resolve();
+            } catch (err) {
+                reject(new Error(`Injection failed: ${err.message}`));
+            }
+        };
+        reader.onerror = () => reject(new Error('File read error'));
+        reader.readAsBinaryString(file);
+    });
+}
+
+async function runForceExport() {
+    if (state.isProcessing) return;
+    const matchedKeys = Object.keys(state.matched);
+    if (!state.workflow.step3 || matchedKeys.length === 0) {
+        alert('No matched images to export');
+        return;
+    }
+    state.isProcessing = true;
+    const btn = document.getElementById('exportBtn');
+    btn.disabled = true;
+    btn.textContent = `⏳ Exporting 0/${matchedKeys.length}...`;
+    let success = 0, failed = 0;
+    for (let i = 0; i < matchedKeys.length; i++) {
+        const key = matchedKeys[i];
+        const match = state.matched[key];
+        try {
+            await forceInjectGPS(key, match.csv);
+            success++;
+            btn.textContent = `⏳ Exporting ${success}/${matchedKeys.length}...`;
+            log(`✅ Injected GPS into ${match.image.file.name} (${success}/${matchedKeys.length})`, 'success');
+        } catch (e) {
+            failed++;
+            log(`❌ Failed to inject ${match.image.file.name}: ${e.message}`, 'error');
+        }
+        await new Promise(r => setTimeout(r, CONFIG.EXPORT_DELAY_MS));
+    }
+    btn.textContent = `✨ Write & Export All (${success}/${matchedKeys.length} exported)`;
+    state.isProcessing = false;
+    updateUI();
+    log(`Export complete: ${success} succeeded, ${failed} failed`, success > 0 ? 'success' : 'error');
+    if (failed === 0) btn.disabled = false;
+}
+
+function exportExistingGpsAsCsv(){ let geo=Object.values(state.imageData).filter(i=>hasValidGPS(i.exif)); if(!geo.length){ alert('No images with valid GPS coordinates found.'); return; } let rows=[["Filename","Latitude (DD)","Longitude (DD)","Altitude (m)"]]; geo.forEach(i=>{ let ex=i.exif; rows.push([i.file.name,ex.GPSLatitude.value.toFixed(8),ex.GPSLongitude.value.toFixed(8),ex.GPSAltitude?.value?ex.GPSAltitude.value.toFixed(2):""]); }); let csv="data:text/csv;charset=utf-8,"+rows.map(r=>r.map(v=>`"${(v+"").replace(/"/g,'""')}"`).join(",")).join("\n"); let a=document.createElement('a'); a.href=encodeURI(csv); a.download=`image_gps_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a); log(`Exported ${geo.length} geotagged images → CSV`,'success'); }
+function resetAll(){ state.csvData={}; state.imageData={}; state.matched={}; state.workflow={step1:false,step2:false,step3:false}; updateWorkflowStep(1,false); updateWorkflowStep(2,false); updateWorkflowStep(3,false); updateUI(); log('All data cleared','info'); closeDetailPanel(); }
+
+// ============ START ============
+window.addEventListener('DOMContentLoaded',()=>{ initMap(); log('GeoTag Pro + 360 v5.0 Ready (all features, export fixed)','info'); });
+</script>
+</body>
 </html>
